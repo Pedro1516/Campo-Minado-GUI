@@ -1,6 +1,6 @@
 # Campo Minado utilizando RayLib
 
-Foobar is a Python library for dealing with word pluralization.
+Campo minado feito em C utilizando biblioteca gráfica RayLib
 
 ## Compilação
 
