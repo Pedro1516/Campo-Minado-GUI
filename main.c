@@ -18,6 +18,17 @@ typedef enum
     GameWinned = 3
 } GameState;
 
+typedef struct
+{
+    int screenHeight;
+    int screenWidth;
+    int cell_size;
+    int cols;
+    int rows;
+    int difficulty;
+
+} Screen;
+
 int **criar_tabuleiro_informacao(int rows, int cols)
 {
     int **tabuleiro = (int **)calloc(rows, sizeof(int *));
@@ -318,45 +329,93 @@ Color define_cor(int num)
     }
 }
 
+Screen *definir_tela(int difficulty)
+{
+    Screen *tela = (Screen *)malloc(sizeof(Screen));
+
+    switch (difficulty)
+    {
+    case 1:
+        *tela = (Screen){
+            .screenHeight = 650,
+            .screenWidth = 500,
+            .cell_size = 50,
+            .difficulty = difficulty};
+        break;
+    case 2:
+        *tela = (Screen){
+            .screenHeight = 650,
+            .screenWidth = 600,
+            .cell_size = 50,
+            .difficulty = difficulty};
+        break;
+    case 3:
+        *tela = (Screen){
+            .screenHeight = 650,
+            .screenWidth = 600,
+            .cell_size = 25,
+            .difficulty = difficulty};
+        break;
+
+    default:
+        *tela = (Screen){
+            .screenHeight = 650,
+            .screenWidth = 600,
+            .cell_size = 50,
+            .difficulty = difficulty};
+        break;
+    }
+
+    tela->rows = floor((tela->screenHeight - (100.0 / tela->cell_size)) / tela->cell_size); // (100 / cell_size) para o espaço do menu;
+    tela->cols = tela->screenWidth / tela->cell_size;
+
+    return tela;
+}
+
+
+
 int main()
 {
     srand(time(NULL));
 
     GameState *estado = malloc(sizeof(GameState));
+    Screen *tela = NULL;
     *estado = GamePlaying;
+    tela = definir_tela(2);
 
-    int screenWidth = 600;
-    int screenHeight = 650;
-    int cell_size = 50;
-    int dificuldade = 1;
     int bandeiras = 0;
     int quant_bombas = 0;
     float piscar = 0;
 
-    int cols = screenWidth / cell_size;
-    int rows = screenHeight / cell_size - 2; // -2 para o espaço do menu
-
-    InitWindow(screenWidth, screenHeight, "Campo Minado");
+    InitWindow(tela->screenWidth, tela->screenHeight, "Campo Minado");
     if (IsWindowState(FLAG_WINDOW_RESIZABLE))
         ClearWindowState(FLAG_WINDOW_RESIZABLE);
 
-    Texture2D flag = LoadTexture("assets/flag.png");
-    Texture2D tile = LoadTexture("assets/tile.png");
+    Image flag_image = LoadImage("assets/flag.png");
+    ImageResize(&flag_image, tela->cell_size, tela->cell_size);
+    Texture2D flag = LoadTextureFromImage(flag_image);
+    UnloadImage(flag_image);
 
-    Rectangle **matrix_view_game = criar_tabuleiro_visualizacao(rows, cols);
-    int **matrix_info_game = criar_tabuleiro_informacao(rows, cols);
+    Image tile_image = LoadImage("assets/tile.png");
+    ImageResize(&tile_image, tela->cell_size, tela->cell_size);
+    Texture2D tile = LoadTextureFromImage(tile_image);
+    UnloadImage(tile_image);
 
-    for (int i = 0; i < rows; i++)
+    Rectangle **matrix_view_game = criar_tabuleiro_visualizacao(tela->rows, tela->cols);
+    int **matrix_info_game = criar_tabuleiro_informacao(tela->rows, tela->cols);
+
+    for (int i = 0; i < tela->rows; i++)
     {
-        for (int j = 0; j < cols; j++)
+        for (int j = 0; j < tela->cols; j++)
         {
-            matrix_view_game[i][j].height = cell_size;
-            matrix_view_game[i][j].width = cell_size;
-            matrix_view_game[i][j].x = cell_size * j;
-            matrix_view_game[i][j].y = cell_size * i + (cell_size * 2); // + cell_size * 2 para o espaço do menu
+            matrix_view_game[i][j].height = tela->cell_size;
+            matrix_view_game[i][j].width = tela->cell_size;
+            matrix_view_game[i][j].x = tela->cell_size * j;
+            matrix_view_game[i][j].y = tela->cell_size * i + 100; // + 100 para o espaço do menu
         }
     }
 
+   
     while (!WindowShouldClose())
     {
         BeginDrawing();
@@ -364,43 +423,43 @@ int main()
         Vector2 mousePoint = GetMousePosition();
 
         // Desenha o tabuleiro
-        for (int i = 0; i < rows; i++)
+        for (int i = 0; i < tela->rows; i++)
         {
-            for (int j = 0; j < cols; j++)
+            for (int j = 0; j < tela->cols; j++)
             {
                 if (matrix_info_game[i][j] <= 0)
                     DrawTextureRec(tile, matrix_view_game[i][j], (Vector2){matrix_view_game[i][j].x, matrix_view_game[i][j].y}, WHITE);
                 else
                     DrawRectangleRec(matrix_view_game[i][j], ((*estado == GameOver && (matrix_info_game[i][j] == 90)) ? RED : GRAY));
 
-                if (*estado == GamePlaying)
-                    printf("%d ", matrix_info_game[i][j]);
+                // if (*estado == GamePlaying)
+                //     printf("%d ", matrix_info_game[i][j]);
             }
-            if (*estado == GamePlaying)
-                printf("\n");
+            // if (*estado == GamePlaying)
+            //     printf("\n");
         }
-        if (*estado == GamePlaying)
-            printf("\n\n");
+        // if (*estado == GamePlaying)
+        //     printf("\n\n");
 
-       // Desenha as linhas do tabuleiro
-        for (int i = 0; i <= cols; i++)
+        // Desenha as linhas do tabuleiro
+        for (int i = 0; i <= tela->cols; i++)
         {
-            DrawLineV((Vector2){i * cell_size, 0}, (Vector2){i * cell_size, (float)screenHeight}, LIGHTGRAY);
+            DrawLineV((Vector2){i * tela->cell_size, 0}, (Vector2){i * tela->cell_size, (float)tela->screenHeight}, LIGHTGRAY);
         }
 
-        for (int i = 2; i <= rows + 2; i++)
+        for (int i = 100 / tela->cell_size; i <= tela->rows + 2; i++)
         {
-            DrawLineV((Vector2){0, i * cell_size}, (Vector2){(float)screenWidth, i * cell_size}, LIGHTGRAY);
+            DrawLineV((Vector2){0, i * tela->cell_size}, (Vector2){(float)tela->screenWidth, i * tela->cell_size}, LIGHTGRAY);
         }
 
         // Desenha a barra de menu superior
-        DrawMenu(bandeiras, screenWidth);
+        DrawMenu(bandeiras, tela->screenWidth);
 
         // Escreve os valores se celula revelada
 
-        for (int i = 0; i < rows; i++)
+        for (int i = 0; i < tela->rows; i++)
         {
-            for (int j = 0; j < cols; j++)
+            for (int j = 0; j < tela->cols; j++)
             {
                 if (matrix_info_game[i][j] <= 0 && matrix_info_game[i][j] >= -9)
                     continue;
@@ -408,13 +467,13 @@ int main()
                 const char *text = TextFormat("%c", matrix_info_game[i][j] < -9 ? 'B' : (matrix_info_game[i][j] == 10 || matrix_info_game[i][j] == 9) ? ' '
                                                                                                                                                       : matrix_info_game[i][j] + '0');
 
-                int font_size = 30;
+                int font_size = tela->cell_size;
                 int text_size = MeasureText(text, font_size);
-                int x = matrix_view_game[i][j].x + (cell_size / 2) - (text_size / 2);
-                int y = matrix_view_game[i][j].y + (cell_size / 2) - (font_size / 2);
+                int x = matrix_view_game[i][j].x + (tela->cell_size / 2) - (text_size / 2);
+                int y = matrix_view_game[i][j].y + (tela->cell_size / 2) - (font_size / 2);
 
                 if (matrix_info_game[i][j] < -9)
-                    DrawTexture(flag, j * cell_size, i * cell_size + 100, WHITE);
+                    DrawTexture(flag, j * tela->cell_size, i * tela->cell_size + 100, WHITE);
                 else
                     DrawText(text, x, y, font_size, define_cor(matrix_info_game[i][j]));
             }
@@ -425,9 +484,9 @@ int main()
             if (!isFirstPlay())
                 timer += GetFrameTime();
             // Verifica se clicou em alguma célula
-            for (int i = 0; i < rows; i++)
+            for (int i = 0; i < tela->rows; i++)
             {
-                for (int j = 0; j < cols; j++)
+                for (int j = 0; j < tela->cols; j++)
                 {
                     if (CheckCollisionPointRec(mousePoint, matrix_view_game[i][j]))
                     {
@@ -435,7 +494,7 @@ int main()
                         {
                             if (isFirstPlay())
                             {
-                                bandeiras = iniciar_partida(matrix_info_game, dificuldade, rows, cols, i, j);
+                                bandeiras = iniciar_partida(matrix_info_game, tela->difficulty, tela->rows, tela->cols, i, j);
                                 quant_bombas = bandeiras;
                                 playing = 1;
                             }
@@ -443,7 +502,7 @@ int main()
                             if (matrix_info_game[i][j] < -9)
                                 bandeiras++;
 
-                            revelar_num(matrix_info_game, rows, cols, i, j);
+                            revelar_num(matrix_info_game, tela->rows, tela->cols, i, j);
 
                             if (matrix_info_game[i][j] == 9)
                             {
@@ -451,7 +510,7 @@ int main()
                                 *estado = GameOver;
                             }
 
-                            if (verificar_vitoria(matrix_info_game, rows, cols, quant_bombas))
+                            if (verificar_vitoria(matrix_info_game, tela->rows, tela->cols, quant_bombas))
                             {
                                 printf("GANHOU PAI!");
                                 *estado = GameWinned;
@@ -460,7 +519,7 @@ int main()
                         }
                         if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT))
                         {
-                            marca_bandeira(matrix_info_game, rows, cols, i, j);
+                            marca_bandeira(matrix_info_game, tela->rows, tela->cols, i, j);
                             if (matrix_info_game[i][j] >= -9 && matrix_info_game[i][j] < 0)
                                 bandeiras++;
                             else if (matrix_info_game[i][j] <= -9 && matrix_info_game[i][j] < -9)
@@ -481,25 +540,25 @@ int main()
             {
                 if (timer_derrota > 0.3)
                 {
-                    animacao_derrota(matrix_info_game, rows, cols);
+                    animacao_derrota(matrix_info_game, tela->rows, tela->cols);
                     timer_derrota = 0;
                 }
                 timer_derrota += GetFrameTime();
             }
             else
-                desenha_tela_vitoria_derrota(matrix_info_game, rows, cols, screenHeight, screenWidth, piscar, estado, "Você Perdeu!", "Pressione Enter para reiniciar!");
+                desenha_tela_vitoria_derrota(matrix_info_game, tela->rows, tela->cols, tela->screenHeight, tela->screenWidth, piscar, estado, "Você Perdeu!", "Pressione Enter para reiniciar!");
 
             piscar += GetFrameTime();
         }
 
         if (*estado == GameWinned)
         {
-            DrawRectangle(0, screenHeight / 2 - screenHeight / 4, screenWidth, screenHeight / 2, ColorAlpha(WHITE, 0.7f));
+            DrawRectangle(0, tela->screenHeight / 2 - tela->screenHeight / 4, tela->screenWidth, tela->screenHeight / 2, ColorAlpha(WHITE, 0.7f));
             char *texto = "Você Ganhou!";
             int fontsize = 65;
             int textwidth = MeasureText(texto, fontsize);
 
-            DrawText(texto, screenWidth / 2 - textwidth / 2, screenHeight / 2 - fontsize / 2 - 20, fontsize, GREEN);
+            DrawText(texto, tela->screenWidth / 2 - textwidth / 2, tela->screenHeight / 2 - fontsize / 2 - 20, fontsize, GREEN);
 
             char *texto2 = "Pressione Enter para reiniciar!";
             int fontsize2 = 25;
@@ -507,13 +566,13 @@ int main()
 
             if ((int)(piscar * 10) % 10)
             {
-                DrawText(texto2, screenWidth / 2 - textwidth2 / 2 + 20, screenHeight / 2 + 100, fontsize2, BLACK);
+                DrawText(texto2, tela->screenWidth / 2 - textwidth2 / 2 + 20, tela->screenHeight / 2 + 100, fontsize2, BLACK);
             }
 
             piscar += GetFrameTime();
 
             if (IsKeyPressed(KEY_ENTER))
-                *estado = reset_game(matrix_info_game, rows, cols);
+                *estado = reset_game(matrix_info_game, tela->rows, tela->cols);
         }
 
         EndDrawing();
@@ -523,12 +582,12 @@ int main()
     UnloadTexture(flag);
     UnloadTexture(tile);
 
-    for (int i = 0; i < rows; i++)
+    for (int i = 0; i < tela->rows; i++)
     {
         free(matrix_info_game[i]);
     }
 
-    for (int i = 0; i < rows; i++)
+    for (int i = 0; i < tela->rows; i++)
     {
         free(matrix_view_game[i]);
     }
