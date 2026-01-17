@@ -29,13 +29,29 @@ typedef struct
 
 } Screen;
 
-int **criar_tabuleiro_informacao(int rows, int cols)
+typedef struct
 {
-    int **tabuleiro = (int **)calloc(rows, sizeof(int *));
+    Rectangle rectangle;
+    Color color;
+    char *text;
+    int font_size;
+} Option;
 
-    for (int i = 0; i < rows; i++)
+typedef struct
+{
+    Option mini_menu;
+    Rectangle janela;
+    Option *options;
+    bool menu_aberto;
+} MenuDifficulty;
+
+int **criar_tabuleiro_informacao(Screen *screen)
+{
+    int **tabuleiro = (int **)calloc(screen->rows, sizeof(int *));
+
+    for (int i = 0; i < screen->rows; i++)
     {
-        tabuleiro[i] = (int *)calloc(cols, sizeof(int));
+        tabuleiro[i] = (int *)calloc(screen->cols, sizeof(int));
     }
 
     return tabuleiro;
@@ -91,12 +107,12 @@ int marca_vazio(int **table, int lin_selected, int col_selected, int rows_tab, i
     return 0;
 }
 
-int gerar_bomba(int **tab, int difficulty, int rows_tab, int cols_tab, int lin_click, int col_click)
+int gerar_bomba(int **tab, Screen *screen, int lin_click, int col_click)
 {
     int quant_bombas = 10, rand_lin, rand_col, i = 0;
     double distancia;
 
-    switch (difficulty)
+    switch (screen->difficulty)
     {
     case 1:
         quant_bombas = 20;
@@ -115,11 +131,11 @@ int gerar_bomba(int **tab, int difficulty, int rows_tab, int cols_tab, int lin_c
 
     while (i < quant_bombas)
     {
-        rand_lin = rand() % rows_tab;
-        rand_col = rand() % cols_tab;
+        rand_lin = rand() % screen->rows;
+        rand_col = rand() % screen->cols;
         distancia = sqrt(pow((rand_col - col_click), 2) + pow((rand_lin - lin_click), 2));
 
-        if (distancia >= 4 && tab[rand_lin][rand_col] != -9)
+        if (distancia >= 2 && tab[rand_lin][rand_col] != -9)
         {
             tab[rand_lin][rand_col] = -9;
             i++;
@@ -178,24 +194,30 @@ int marca_bandeira(int **tab, int rows_tab, int cols_tab, int lin_selected, int 
     if (tab[lin_selected][col_selected] > 0)
         return 0;
 
-    // if (tab[lin_selected][col_selected] == -9)
-    //     return 1;
-    // else if (tab[lin_selected][col_selected] == -19)
-    //     return -1;
-
     if (tab[lin_selected][col_selected] >= -9)
         tab[lin_selected][col_selected] -= 10; // Coloca uma bandeira no campo
     else
         tab[lin_selected][col_selected] += 10; // Tira uma bandeira no campo
 }
 
-Rectangle **criar_tabuleiro_visualizacao(int rows, int cols)
+Rectangle **criar_tabuleiro_visualizacao(Screen *screen)
 {
-    Rectangle **tabuleiro = (Rectangle **)calloc(rows, sizeof(Rectangle *));
+    Rectangle **tabuleiro = (Rectangle **)calloc(screen->rows, sizeof(Rectangle *));
 
-    for (int i = 0; i < rows; i++)
+    for (int i = 0; i < screen->rows; i++)
     {
-        tabuleiro[i] = (Rectangle *)calloc(cols, sizeof(Rectangle));
+        tabuleiro[i] = (Rectangle *)calloc(screen->cols, sizeof(Rectangle));
+    }
+
+    for (int i = 0; i < screen->rows; i++)
+    {
+        for (int j = 0; j < screen->cols; j++)
+        {
+            tabuleiro[i][j].height = screen->cell_size;
+            tabuleiro[i][j].width = screen->cell_size;
+            tabuleiro[i][j].x = screen->cell_size * j;
+            tabuleiro[i][j].y = screen->cell_size * i + 100; // + 100 para o espaço do menu
+        }
     }
 
     return tabuleiro;
@@ -206,18 +228,18 @@ int isFirstPlay()
     return !playing;
 }
 
-int iniciar_partida(int **tab, int difficulty, int rows_tab, int cols_tab, int lins_bomb, int col_bomb)
+int iniciar_partida(int **tab, Screen *screen, int lins_bomb, int col_bomb)
 {
-    int quantidade_bandeira = gerar_bomba(tab, difficulty, rows_tab, cols_tab, lins_bomb, col_bomb);
-    marcar_bomba(tab, rows_tab, cols_tab);
+    int quantidade_bandeira = gerar_bomba(tab, screen, lins_bomb, col_bomb);
+    marcar_bomba(tab, screen->rows, screen->cols);
 
     return quantidade_bandeira;
 }
 
-void DrawMenu(int bandeiras, int screenWidth)
+void DrawMenu(int bandeiras, Screen *screen)
 {
-    DrawRectangle(0, 0, screenWidth, 100, BLACK);
-    DrawLineV((Vector2){0, 100}, (Vector2){(float)screenWidth, 100}, LIGHTGRAY);
+    DrawRectangle(0, 0, screen->screenWidth, 100, BLACK);
+    DrawLineV((Vector2){0, 100}, (Vector2){(float)screen->screenWidth, 100}, LIGHTGRAY);
     const char *texto = TextFormat("%d Bandeiras", bandeiras);
     int font_size = 25;
     DrawText(texto, 10, 10, 30, WHITE);
@@ -227,11 +249,11 @@ void DrawMenu(int bandeiras, int screenWidth)
     DrawText(texto2, 30, 35, 30, WHITE);
 }
 
-GameState reset_game(int **tab, int rows, int cols)
+GameState reset_game(int **tab, Screen *screen)
 {
-    for (int i = 0; i < rows; i++)
+    for (int i = 0; i < screen->rows; i++)
     {
-        for (int j = 0; j < cols; j++)
+        for (int j = 0; j < screen->cols; j++)
         {
             tab[i][j] = 0;
         }
@@ -252,7 +274,6 @@ int verificar_vitoria(int **tab, int rows, int cols, int quant_bombas)
                 return 0;
         }
     }
-
     return 1;
 }
 
@@ -275,24 +296,24 @@ void animacao_derrota(int **tab_info, int tab_row, int tab_col)
         derrota = 1;
 }
 
-void desenha_tela_vitoria_derrota(int **matrix_info_game, int rows, int cols, int screenHeight, int screenWidth, float piscar, GameState *estado, char *texto1, char *texto2)
+void desenha_tela_vitoria_derrota(int **matrix_info_game, Screen *screen, float piscar, GameState *estado, char *texto1, char *texto2)
 {
-    DrawRectangle(0, screenHeight / 2 - screenHeight / 4, screenWidth, screenHeight / 2, ColorAlpha(WHITE, 0.7f));
+    DrawRectangle(0, screen->screenHeight / 2 - screen->screenHeight / 4, screen->screenWidth, screen->screenHeight / 2, ColorAlpha(WHITE, 0.7f));
     int fontsize = 65;
     int textwidth = MeasureText(texto1, fontsize);
 
-    DrawText(texto1, screenWidth / 2 - textwidth / 2, screenHeight / 2 - fontsize / 2 - 20, fontsize, RED);
+    DrawText(texto1, screen->screenWidth / 2 - textwidth / 2, screen->screenHeight / 2 - fontsize / 2 - 20, fontsize, RED);
 
     int fontsize2 = 25;
     int textwidth2 = MeasureText(texto1, fontsize);
 
     if ((int)(piscar * 10) % 10)
     {
-        DrawText(texto2, screenWidth / 2 - textwidth2 / 2 + 20, screenHeight / 2 + 100, fontsize2, BLACK);
+        DrawText(texto2, screen->screenWidth / 2 - textwidth2 / 2 + 20, screen->screenHeight / 2 + 100, fontsize2, BLACK);
     }
 
     if (IsKeyPressed(KEY_ENTER))
-        *estado = reset_game(matrix_info_game, rows, cols);
+        *estado = reset_game(matrix_info_game, screen);
 }
 
 Color define_cor(int num)
@@ -372,7 +393,105 @@ Screen *definir_tela(int difficulty)
     return tela;
 }
 
+void criar_janela_dificuldade(MenuDifficulty *menu)
+{
+    menu->janela.height = menu->mini_menu.rectangle.height * 3;
+    menu->janela.width = menu->mini_menu.rectangle.width;
+    menu->janela.x = menu->mini_menu.rectangle.x;
+    menu->janela.y = menu->mini_menu.rectangle.y + menu->mini_menu.rectangle.height;
 
+    menu->options = (Option *)malloc(sizeof(Option) * 3);
+
+    for (int i = 0; i < 3; i++)
+    {
+        menu->options[i].font_size = menu->mini_menu.font_size;
+        menu->options[i].rectangle.height = menu->mini_menu.font_size;
+        menu->options[i].rectangle.width = menu->mini_menu.rectangle.width;
+        menu->options[i].rectangle.x = menu->mini_menu.rectangle.x;
+        menu->options[i].rectangle.y = menu->mini_menu.rectangle.y + menu->mini_menu.font_size + (i * menu->mini_menu.font_size);
+        menu->options[i].color = WHITE;
+
+        switch (i)
+        {
+        case 0:
+            menu->options[i].text = (char *)malloc(sizeof("Fácil"));
+            strcpy(menu->options[i].text, "Fácil");
+            break;
+        case 1:
+            menu->options[i].text = (char *)malloc(sizeof("Médio"));
+            strcpy(menu->options[i].text, "Médio");
+            break;
+        case 2:
+            menu->options[i].text = (char *)malloc(sizeof("Dificil") * sizeof(char));
+            strcpy((menu->options[i].text), "Dificil");
+            break;
+        default:
+            break;
+        }
+    }
+}
+
+MenuDifficulty *criar_menu_dificuldade(Screen *screen)
+{
+    MenuDifficulty *menu = (MenuDifficulty *)malloc(sizeof(MenuDifficulty));
+
+    menu->mini_menu.color = WHITE;
+    menu->mini_menu.font_size = 20;
+    menu->mini_menu.rectangle.width = screen->screenWidth / 4 - 5;
+    menu->mini_menu.rectangle.height = menu->mini_menu.font_size;
+    menu->mini_menu.rectangle.x = screen->screenWidth / 2 + menu->mini_menu.rectangle.width;
+    menu->mini_menu.rectangle.y = 5;
+    menu->menu_aberto = false;
+
+    switch (screen->difficulty)
+    {
+    case 1:
+        menu->mini_menu.text = (char *)malloc(sizeof("Fácil"));
+        strcpy(menu->mini_menu.text, "Fácil");
+        break;
+    case 2:
+        menu->mini_menu.text = (char *)malloc(sizeof("Médio"));
+        strcpy(menu->mini_menu.text, "Médio");
+        break;
+    case 3:
+        menu->mini_menu.text = (char *)malloc(sizeof("Dificil") * sizeof(char));
+        strcpy((menu->mini_menu.text), "Dificil");
+        break;
+    default:
+        menu->mini_menu.text = (char *)malloc(sizeof("Médio"));
+        strcpy(menu->mini_menu.text, "Médio");
+        break;
+    }
+
+    criar_janela_dificuldade(menu);
+
+    return menu;
+}
+
+void DrawMenuDifficulty(MenuDifficulty *menu)
+{
+    DrawRectangleRec(menu->mini_menu.rectangle, menu->mini_menu.color);
+    DrawText(menu->mini_menu.text, menu->mini_menu.rectangle.x + 5, menu->mini_menu.rectangle.y, menu->mini_menu.font_size, BLACK);
+
+    if (menu->menu_aberto)
+    {
+        DrawRectangleRec(menu->janela, WHITE);
+        for (int i = 0; i < 3; i++)
+        {
+            DrawRectangleRec(menu->options[i].rectangle, menu->options[i].color);
+            DrawText(menu->options[i].text, menu->options[i].rectangle.x + 5, menu->options[i].rectangle.y, menu->options[i].font_size, BLACK);
+        }
+    }
+}
+
+Texture2D carregar_textura(Screen *screen, char *src)
+{
+    Image image = LoadImage(src);
+    ImageResize(&image, screen->cell_size, screen->cell_size);
+    Texture2D texture = LoadTextureFromImage(image);
+    UnloadImage(image);
+    return texture;
+}
 
 int main()
 {
@@ -380,8 +499,10 @@ int main()
 
     GameState *estado = malloc(sizeof(GameState));
     Screen *tela = NULL;
+    MenuDifficulty *menu_dificuldade = NULL;
     *estado = GamePlaying;
     tela = definir_tela(2);
+    menu_dificuldade = criar_menu_dificuldade(tela);
 
     int bandeiras = 0;
     int quant_bombas = 0;
@@ -391,31 +512,13 @@ int main()
     if (IsWindowState(FLAG_WINDOW_RESIZABLE))
         ClearWindowState(FLAG_WINDOW_RESIZABLE);
 
-    Image flag_image = LoadImage("assets/flag.png");
-    ImageResize(&flag_image, tela->cell_size, tela->cell_size);
-    Texture2D flag = LoadTextureFromImage(flag_image);
-    UnloadImage(flag_image);
+    Texture2D flag = carregar_textura(tela, "assets/flag.png");
+    Texture2D tile = carregar_textura(tela, "assets/tile.png");
 
-    Image tile_image = LoadImage("assets/tile.png");
-    ImageResize(&tile_image, tela->cell_size, tela->cell_size);
-    Texture2D tile = LoadTextureFromImage(tile_image);
-    UnloadImage(tile_image);
+    Rectangle **matrix_view_game = criar_tabuleiro_visualizacao(tela);
 
-    Rectangle **matrix_view_game = criar_tabuleiro_visualizacao(tela->rows, tela->cols);
-    int **matrix_info_game = criar_tabuleiro_informacao(tela->rows, tela->cols);
+    int **matrix_info_game = criar_tabuleiro_informacao(tela);
 
-    for (int i = 0; i < tela->rows; i++)
-    {
-        for (int j = 0; j < tela->cols; j++)
-        {
-            matrix_view_game[i][j].height = tela->cell_size;
-            matrix_view_game[i][j].width = tela->cell_size;
-            matrix_view_game[i][j].x = tela->cell_size * j;
-            matrix_view_game[i][j].y = tela->cell_size * i + 100; // + 100 para o espaço do menu
-        }
-    }
-
-   
     while (!WindowShouldClose())
     {
         BeginDrawing();
@@ -431,15 +534,8 @@ int main()
                     DrawTextureRec(tile, matrix_view_game[i][j], (Vector2){matrix_view_game[i][j].x, matrix_view_game[i][j].y}, WHITE);
                 else
                     DrawRectangleRec(matrix_view_game[i][j], ((*estado == GameOver && (matrix_info_game[i][j] == 90)) ? RED : GRAY));
-
-                // if (*estado == GamePlaying)
-                //     printf("%d ", matrix_info_game[i][j]);
             }
-            // if (*estado == GamePlaying)
-            //     printf("\n");
         }
-        // if (*estado == GamePlaying)
-        //     printf("\n\n");
 
         // Desenha as linhas do tabuleiro
         for (int i = 0; i <= tela->cols; i++)
@@ -453,7 +549,8 @@ int main()
         }
 
         // Desenha a barra de menu superior
-        DrawMenu(bandeiras, tela->screenWidth);
+        DrawMenu(bandeiras, tela);
+        DrawMenuDifficulty(menu_dificuldade);
 
         // Escreve os valores se celula revelada
 
@@ -479,6 +576,55 @@ int main()
             }
         }
 
+        // Verificacao mudanca de dificuldade
+        if (CheckCollisionPointRec(mousePoint, menu_dificuldade->mini_menu.rectangle))
+        {
+            SetMouseCursor(MOUSE_CURSOR_POINTING_HAND);
+
+            if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
+            {
+                menu_dificuldade->menu_aberto = !menu_dificuldade->menu_aberto;
+            }
+        }
+        else
+        {
+            SetMouseCursor(MOUSE_CURSOR_DEFAULT);
+        }
+
+        // verifica a colisão nas opções de dificuldade
+        for (size_t i = 0; i < 3; i++)
+        {
+            if (CheckCollisionPointRec(mousePoint, menu_dificuldade->options[i].rectangle) && menu_dificuldade->menu_aberto)
+            {
+                menu_dificuldade->options[i].color = LIGHTGRAY;
+
+                if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && i + 1 != tela->difficulty)
+                {
+                    menu_dificuldade->menu_aberto = false;
+                    strcpy(menu_dificuldade->mini_menu.text, menu_dificuldade->options[i].text);
+
+                    free(tela);
+                    free(matrix_info_game);
+                    free(matrix_view_game);
+                    free(menu_dificuldade);
+
+                    tela = definir_tela(i + 1);
+                    matrix_info_game = criar_tabuleiro_informacao(tela);
+                    matrix_view_game = criar_tabuleiro_visualizacao(tela);
+                    menu_dificuldade = criar_menu_dificuldade(tela);
+                    flag = carregar_textura(tela, "assets/flag.png");
+                    tile = carregar_textura(tela, "assets/tile.png");
+                    reset_game(matrix_info_game, tela);
+                    SetWindowSize(tela->screenWidth, tela->screenHeight);
+                }
+            }
+            else
+            {
+                menu_dificuldade->options[i].color = WHITE;
+            }
+        }
+
+        // Jogo em execução
         if (*estado == GamePlaying)
         {
             if (!isFirstPlay())
@@ -490,11 +636,11 @@ int main()
                 {
                     if (CheckCollisionPointRec(mousePoint, matrix_view_game[i][j]))
                     {
-                        if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && matrix_info_game[i][j] >= -9)
+                        if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && matrix_info_game[i][j] >= -9 && !(CheckCollisionPointRec(mousePoint, menu_dificuldade->mini_menu.rectangle)))
                         {
                             if (isFirstPlay())
                             {
-                                bandeiras = iniciar_partida(matrix_info_game, tela->difficulty, tela->rows, tela->cols, i, j);
+                                bandeiras = iniciar_partida(matrix_info_game, tela, i, j);
                                 quant_bombas = bandeiras;
                                 playing = 1;
                             }
@@ -546,7 +692,7 @@ int main()
                 timer_derrota += GetFrameTime();
             }
             else
-                desenha_tela_vitoria_derrota(matrix_info_game, tela->rows, tela->cols, tela->screenHeight, tela->screenWidth, piscar, estado, "Você Perdeu!", "Pressione Enter para reiniciar!");
+                desenha_tela_vitoria_derrota(matrix_info_game, tela, piscar, estado, "Você Perdeu!", "Pressione Enter para reiniciar!");
 
             piscar += GetFrameTime();
         }
@@ -572,7 +718,7 @@ int main()
             piscar += GetFrameTime();
 
             if (IsKeyPressed(KEY_ENTER))
-                *estado = reset_game(matrix_info_game, tela->rows, tela->cols);
+                *estado = reset_game(matrix_info_game, tela);
         }
 
         EndDrawing();
@@ -595,6 +741,7 @@ int main()
     free(*matrix_info_game);
     free(*matrix_view_game);
     free(estado);
+    free(tela);
 
     return 0;
 }
