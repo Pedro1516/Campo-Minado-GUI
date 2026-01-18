@@ -135,7 +135,7 @@ int gerar_bomba(int **tab, Screen *screen, int lin_click, int col_click)
         rand_col = rand() % screen->cols;
         distancia = sqrt(pow((rand_col - col_click), 2) + pow((rand_lin - lin_click), 2));
 
-        if (distancia >= 2 && tab[rand_lin][rand_col] != -9)
+        if (distancia >= screen->difficulty * 2 && tab[rand_lin][rand_col] != -9)
         {
             tab[rand_lin][rand_col] = -9;
             i++;
@@ -277,22 +277,40 @@ int verificar_vitoria(int **tab, int rows, int cols, int quant_bombas)
     return 1;
 }
 
-void animacao_derrota(int **tab_info, int tab_row, int tab_col)
+void animacao_derrota(int **tab_info, Screen *screen, Vector2 clickmouse)
 {
-    int i, j;
-    for (i = 0; i < tab_row; i++)
+    int i, j, aux = 0;
+
+    if (clickmouse.x != -1 && clickmouse.y != -1)
     {
-        for (j = 0; j < tab_col; j++)
+        tab_info[(int)clickmouse.x][(int)clickmouse.y] = 94;
+        return;
+    }
+
+    for (i = 0; i < screen->rows; i++)
+    {
+        for (j = 0; j < screen->cols; j++)
         {
             if (tab_info[i][j] == -9 || tab_info[i][j] == -19 || tab_info[i][j] == 9)
             {
+
                 tab_info[i][j] = 90;
                 return;
+            }
+
+            if (tab_info[i][j] >= 90 && tab_info[i][j] < 94)
+            {
+                tab_info[i][j]++;
+                aux = 0;
+            }
+            else if (tab_info[i][j] == 94)
+            {
+                aux = 1;
             }
         }
     }
 
-    if (i == tab_row && j == tab_col)
+    if (i == screen->rows && j == screen->cols && aux)
         derrota = 1;
 }
 
@@ -387,7 +405,7 @@ Screen *definir_tela(int difficulty)
         break;
     }
 
-    tela->rows = floor((tela->screenHeight - (100.0 / tela->cell_size)) / tela->cell_size); // (100 / cell_size) para o espaço do menu;
+    tela->rows = floor((tela->screenHeight - 100.0) / tela->cell_size); // (100 / cell_size) para o espaço do menu;
     tela->cols = tela->screenWidth / tela->cell_size;
 
     return tela;
@@ -487,9 +505,14 @@ void DrawMenuDifficulty(MenuDifficulty *menu)
 Texture2D carregar_textura(Screen *screen, char *src)
 {
     Image image = LoadImage(src);
+    if (image.data == NULL)
+        return (Texture2D){0};
+
     ImageResize(&image, screen->cell_size, screen->cell_size);
     Texture2D texture = LoadTextureFromImage(image);
     UnloadImage(image);
+
+    SetTextureFilter(texture, TEXTURE_FILTER_POINT);
     return texture;
 }
 
@@ -507,6 +530,7 @@ int main()
     int bandeiras = 0;
     int quant_bombas = 0;
     float piscar = 0;
+    int skip_animacao_derrota = 0;
 
     InitWindow(tela->screenWidth, tela->screenHeight, "Campo Minado");
     if (IsWindowState(FLAG_WINDOW_RESIZABLE))
@@ -514,6 +538,8 @@ int main()
 
     Texture2D flag = carregar_textura(tela, "assets/flag.png");
     Texture2D tile = carregar_textura(tela, "assets/tile.png");
+    Texture2D mine = LoadTexture("assets/mine.png");
+    SetTextureFilter(mine, TEXTURE_FILTER_POINT);
 
     Rectangle **matrix_view_game = criar_tabuleiro_visualizacao(tela);
 
@@ -531,9 +557,28 @@ int main()
             for (int j = 0; j < tela->cols; j++)
             {
                 if (matrix_info_game[i][j] <= 0)
-                    DrawTextureRec(tile, matrix_view_game[i][j], (Vector2){matrix_view_game[i][j].x, matrix_view_game[i][j].y}, WHITE);
+                {
+                    Rectangle fonteOriginal = {0, 0, (float)tile.width, (float)tile.height};
+                    DrawTexturePro(tile,
+                                   fonteOriginal,
+                                   matrix_view_game[i][j], // Destino na tela
+                                   (Vector2){0, 0},        // Origem de rotação
+                                   0.0f,                   // Rotação
+                                   WHITE);
+                }
+                else if (matrix_info_game[i][j] >= 90 && matrix_info_game[i][j] < 95)
+                {
+
+                    Rectangle corte = {(matrix_info_game[i][j] - 90) * 50, 0, (float)mine.width / 5, (float)mine.height};
+                    DrawTexturePro(mine,
+                                   corte,
+                                   matrix_view_game[i][j], // Destino na tela
+                                   (Vector2){0, 0},        // Origem de rotação
+                                   0.0f,                   // Rotação
+                                   WHITE);
+                }
                 else
-                    DrawRectangleRec(matrix_view_game[i][j], ((*estado == GameOver && (matrix_info_game[i][j] == 90)) ? RED : GRAY));
+                    DrawRectangleRec(matrix_view_game[i][j], GRAY);
             }
         }
 
@@ -571,7 +616,8 @@ int main()
 
                 if (matrix_info_game[i][j] < -9)
                     DrawTexture(flag, j * tela->cell_size, i * tela->cell_size + 100, WHITE);
-                else
+
+                else if (!(matrix_info_game[i][j] >= 90 && matrix_info_game[i][j] < 95))
                     DrawText(text, x, y, font_size, define_cor(matrix_info_game[i][j]));
             }
         }
@@ -614,7 +660,7 @@ int main()
                     menu_dificuldade = criar_menu_dificuldade(tela);
                     flag = carregar_textura(tela, "assets/flag.png");
                     tile = carregar_textura(tela, "assets/tile.png");
-                    reset_game(matrix_info_game, tela);
+                    *estado = reset_game(matrix_info_game, tela);
                     SetWindowSize(tela->screenWidth, tela->screenHeight);
                 }
             }
@@ -654,6 +700,7 @@ int main()
                             {
                                 DrawRectangleRec(matrix_view_game[i][j], RED);
                                 *estado = GameOver;
+                                animacao_derrota(matrix_info_game, tela, (Vector2){i, j});
                             }
 
                             if (verificar_vitoria(matrix_info_game, tela->rows, tela->cols, quant_bombas))
@@ -682,17 +729,23 @@ int main()
 
         if (*estado == GameOver)
         {
-            if (!derrota)
+            if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
+                skip_animacao_derrota++;
+
+            if (timer_derrota > 0.15)
             {
-                if (timer_derrota > 0.3)
-                {
-                    animacao_derrota(matrix_info_game, tela->rows, tela->cols);
-                    timer_derrota = 0;
-                }
-                timer_derrota += GetFrameTime();
+                animacao_derrota(matrix_info_game, tela, (Vector2){-1, -1});
+                timer_derrota = 0;
             }
-            else
+            timer_derrota += GetFrameTime();
+
+            if (derrota || skip_animacao_derrota > 1)
+            {
                 desenha_tela_vitoria_derrota(matrix_info_game, tela, piscar, estado, "Você Perdeu!", "Pressione Enter para reiniciar!");
+
+                if (IsKeyPressed(KEY_ENTER))
+                    skip_animacao_derrota = 0;
+            }
 
             piscar += GetFrameTime();
         }
