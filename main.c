@@ -4,6 +4,10 @@
 #include <time.h>
 #include <string.h>
 #include <math.h>
+#include "assets/icon.h"
+#include "assets/flag.h"
+#include "assets/tile.h"
+#include "assets/mine.h"
 
 int playing = 0;
 int derrota = 0;
@@ -502,9 +506,9 @@ void DrawMenuDifficulty(MenuDifficulty *menu)
     }
 }
 
-Texture2D carregar_textura(Screen *screen, char *src)
+Texture2D carregar_textura(Screen *screen, char *src, int size)
 {
-    Image image = LoadImage(src);
+    Image image = LoadImageFromMemory(".png", src, size);
     if (image.data == NULL)
         return (Texture2D){0};
 
@@ -536,9 +540,12 @@ int main()
     if (IsWindowState(FLAG_WINDOW_RESIZABLE))
         ClearWindowState(FLAG_WINDOW_RESIZABLE);
 
-    Texture2D flag = carregar_textura(tela, "assets/flag.png");
-    Texture2D tile = carregar_textura(tela, "assets/tile.png");
-    Texture2D mine = LoadTexture("assets/mine.png");
+    Image img_icon = LoadImageFromMemory(".png", icon, icon_size);
+    SetWindowIcon(img_icon);
+
+    Texture2D flag = carregar_textura(tela, flag_header, flag_size);
+    Texture2D tile = carregar_textura(tela, tile_header, tile_size);
+    Texture2D mine = LoadTextureFromImage(LoadImageFromMemory(".png", mine_header, mine_header_size));
     SetTextureFilter(mine, TEXTURE_FILTER_POINT);
 
     Rectangle **matrix_view_game = criar_tabuleiro_visualizacao(tela);
@@ -658,8 +665,8 @@ int main()
                     matrix_info_game = criar_tabuleiro_informacao(tela);
                     matrix_view_game = criar_tabuleiro_visualizacao(tela);
                     menu_dificuldade = criar_menu_dificuldade(tela);
-                    flag = carregar_textura(tela, "assets/flag.png");
-                    tile = carregar_textura(tela, "assets/tile.png");
+                    flag = carregar_textura(tela, flag_header, flag_size);
+                    tile = carregar_textura(tela, tile_header, tile_size);
                     *estado = reset_game(matrix_info_game, tela);
                     SetWindowSize(tela->screenWidth, tela->screenHeight);
                 }
