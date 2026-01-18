@@ -16,8 +16,6 @@ Ou se você estiver utilizando Windows execute a seguinte linha de código:
 gcc main.c -o jogo.exe -lraylib -lopengl32 -lgdi32 -lwinmm -lpthread -static -s -mwindows
 ```
 
-O repositorio inclui um arquivo de compilação, utilizio para mais facilidade.
-
 ## Usage
 
 
