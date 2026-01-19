@@ -10,7 +10,7 @@ int main(int argc, char *argv[]) {
         printf("0x%02x, ", b);
         if (++count % 12 == 0) printf("\n");
     }
-    printf("};\nunsigned int %s_size = %d;\n", argv[2], count);
+    printf("};\nunsigned int %s_size = %d;\n", argv[2], count); 
     fclose(in);
     return 0;
 }

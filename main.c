@@ -11,6 +11,15 @@
 #include "assets/tile_error.h"
 #include "assets/volume_off.h"
 #include "assets/volume_up.h"
+#include "assets/revelar0.h"
+#include "assets/revelar1.h"
+#include "assets/revelar2.h"
+#include "assets/revelar3.h"
+#include "assets/revelar4.h"
+#include "assets/tirar_bandeira.h"
+#include "assets/colocar_bandeira.h"
+#include "assets/mine_sound.h"
+
 
 #define MAX_SOUNDS 10
 
@@ -279,7 +288,7 @@ void DrawMenu(int bandeiras, Screen *screen, Volume *volume)
     if (volume->status)
         DrawTexture(volume->volume_on, volume->collision.x, volume->collision.y, WHITE);
     else
-        DrawTexture(volume->volume_off,  volume->collision.x, volume->collision.y, WHITE);
+        DrawTexture(volume->volume_off, volume->collision.x, volume->collision.y, WHITE);
 }
 
 GameState reset_game(int **tab, Screen *screen)
@@ -553,10 +562,12 @@ Texture2D carregar_textura(Screen *screen, char *src, int size)
     return texture;
 }
 
-SoundList *carregar_som(char *src)
+SoundList *carregar_som(char *src, int size)
 {
     SoundList *lista_som = (SoundList *)malloc(sizeof(SoundList));
-    lista_som->sound[0] = LoadSound(src);
+    
+    Wave temp = LoadWaveFromMemory(".wav", src, size);
+    lista_som->sound[0] = LoadSoundFromWave(temp);
 
     for (int i = 1; i < MAX_SOUNDS; i++)
         lista_som->sound[i] = LoadSoundAlias(lista_som->sound[0]);
@@ -579,7 +590,7 @@ Volume *definir_volume(Screen *screen)
     Volume *volume = (Volume *)malloc(sizeof(Volume));
     volume->volume_off = carregar_textura(screen, volume_off, volume_off_size);
     volume->volume_on = carregar_textura(screen, volume_up, volume_up_size);
-    volume->status = false;
+    volume->status = true;
 
     volume->collision.x = screen->screenWidth - 50;
     volume->collision.y = 50;
@@ -622,16 +633,16 @@ int main()
 
     InitAudioDevice();
 
-    SoundList *flag_sound_down = carregar_som("assets/tirar_bandeira.wav");
-    SoundList *flag_sound_up = carregar_som("assets/colocar_bandeira.wav");
-    SoundList *mine_sound = carregar_som("assets/mine_sound.wav");
+    SoundList *flag_sound_down = carregar_som(tirar_bandeira, tirar_bandeira_size);
+    SoundList *flag_sound_up = carregar_som(colocar_bandeira, colocar_bandeira_size);
+    SoundList *mine_sound = carregar_som(mine_sound_header, mine_sound_header_size);
     SoundList *revelar_sound[5];
 
-    revelar_sound[0] = carregar_som("assets/revelar0.wav");
-    revelar_sound[1] = carregar_som("assets/revelar1.wav");
-    revelar_sound[2] = carregar_som("assets/revelar2.wav");
-    revelar_sound[3] = carregar_som("assets/revelar3.wav");
-    revelar_sound[4] = carregar_som("assets/revelar4.wav");
+    revelar_sound[0] = carregar_som(revelar0, revelar0_size);
+    revelar_sound[1] = carregar_som(revelar1, revelar1_size);
+    revelar_sound[2] = carregar_som(revelar2, revelar2_size);
+    revelar_sound[3] = carregar_som(revelar3, revelar3_size);
+    revelar_sound[4] = carregar_som(revelar4, revelar4_size);
 
     Rectangle **matrix_view_game = criar_tabuleiro_visualizacao(tela);
 
