@@ -8,6 +8,11 @@
 #include "assets/flag.h"
 #include "assets/tile.h"
 #include "assets/mine.h"
+#include "assets/tile_error.h"
+#include "assets/volume_off.h"
+#include "assets/volume_up.h"
+
+#define MAX_SOUNDS 10
 
 int playing = 0;
 int derrota = 0;
@@ -21,6 +26,20 @@ typedef enum
     GamePlaying = 2,
     GameWinned = 3
 } GameState;
+
+typedef struct
+{
+    Sound sound[MAX_SOUNDS];
+    int currentsound;
+} SoundList;
+
+typedef struct
+{
+    Texture2D volume_off;
+    Texture2D volume_on;
+    Rectangle collision;
+    bool status;
+} Volume;
 
 typedef struct
 {
@@ -240,17 +259,27 @@ int iniciar_partida(int **tab, Screen *screen, int lins_bomb, int col_bomb)
     return quantidade_bandeira;
 }
 
-void DrawMenu(int bandeiras, Screen *screen)
+void DrawMenu(int bandeiras, Screen *screen, Volume *volume)
 {
+    // Desenha o menu
     DrawRectangle(0, 0, screen->screenWidth, 100, BLACK);
     DrawLineV((Vector2){0, 100}, (Vector2){(float)screen->screenWidth, 100}, LIGHTGRAY);
+
+    // Desenha o contador de bandeiras
     const char *texto = TextFormat("%d Bandeiras", bandeiras);
     int font_size = 25;
     DrawText(texto, 10, 10, 30, WHITE);
 
+    // Desenha o timer
     const char *texto2 = TextFormat("%00.0fs", timer);
     font_size = 10;
     DrawText(texto2, 30, 35, 30, WHITE);
+
+    // Desenha o botão de mute
+    if (volume->status)
+        DrawTexture(volume->volume_on, volume->collision.x, volume->collision.y, WHITE);
+    else
+        DrawTexture(volume->volume_off,  volume->collision.x, volume->collision.y, WHITE);
 }
 
 GameState reset_game(int **tab, Screen *screen)
@@ -295,14 +324,18 @@ void animacao_derrota(int **tab_info, Screen *screen, Vector2 clickmouse)
     {
         for (j = 0; j < screen->cols; j++)
         {
-            if (tab_info[i][j] == -9 || tab_info[i][j] == -19 || tab_info[i][j] == 9)
+            if (tab_info[i][j] == -9 || tab_info[i][j] == 9) // Marca como mina não revalada
             {
 
                 tab_info[i][j] = 90;
                 return;
             }
+            else if (tab_info[i][j] < -9 && tab_info[i][j] != -19)
+            { // Se a bandeira está marcando um local que não é mina
+                tab_info[i][j] = 95;
+            }
 
-            if (tab_info[i][j] >= 90 && tab_info[i][j] < 94)
+            if (tab_info[i][j] >= 90 && tab_info[i][j] < 94) // Itera sob os estagios da explosao
             {
                 tab_info[i][j]++;
                 aux = 0;
@@ -520,12 +553,49 @@ Texture2D carregar_textura(Screen *screen, char *src, int size)
     return texture;
 }
 
+SoundList *carregar_som(char *src)
+{
+    SoundList *lista_som = (SoundList *)malloc(sizeof(SoundList));
+    lista_som->sound[0] = LoadSound(src);
+
+    for (int i = 1; i < MAX_SOUNDS; i++)
+        lista_som->sound[i] = LoadSoundAlias(lista_som->sound[0]);
+    lista_som->currentsound = 0;
+
+    return lista_som;
+}
+
+void reproduzir_audio(SoundList *som)
+{
+    PlaySound(som->sound[som->currentsound]);
+    som->currentsound++;
+
+    if (som->currentsound >= MAX_SOUNDS)
+        som->currentsound = 0;
+}
+
+Volume *definir_volume(Screen *screen)
+{
+    Volume *volume = (Volume *)malloc(sizeof(Volume));
+    volume->volume_off = carregar_textura(screen, volume_off, volume_off_size);
+    volume->volume_on = carregar_textura(screen, volume_up, volume_up_size);
+    volume->status = false;
+
+    volume->collision.x = screen->screenWidth - 50;
+    volume->collision.y = 50;
+    volume->collision.height = 50;
+    volume->collision.width = 50;
+
+    return volume;
+}
+
 int main()
 {
     srand(time(NULL));
 
     GameState *estado = malloc(sizeof(GameState));
     Screen *tela = NULL;
+    Volume *volume = NULL;
     MenuDifficulty *menu_dificuldade = NULL;
     *estado = GamePlaying;
     tela = definir_tela(2);
@@ -545,8 +615,23 @@ int main()
 
     Texture2D flag = carregar_textura(tela, flag_header, flag_size);
     Texture2D tile = carregar_textura(tela, tile_header, tile_size);
+    Texture2D tile_error = carregar_textura(tela, tile_error_header, tile_error_size);
     Texture2D mine = LoadTextureFromImage(LoadImageFromMemory(".png", mine_header, mine_header_size));
     SetTextureFilter(mine, TEXTURE_FILTER_POINT);
+    volume = definir_volume(tela);
+
+    InitAudioDevice();
+
+    SoundList *flag_sound_down = carregar_som("assets/tirar_bandeira.wav");
+    SoundList *flag_sound_up = carregar_som("assets/colocar_bandeira.wav");
+    SoundList *mine_sound = carregar_som("assets/mine_sound.wav");
+    SoundList *revelar_sound[5];
+
+    revelar_sound[0] = carregar_som("assets/revelar0.wav");
+    revelar_sound[1] = carregar_som("assets/revelar1.wav");
+    revelar_sound[2] = carregar_som("assets/revelar2.wav");
+    revelar_sound[3] = carregar_som("assets/revelar3.wav");
+    revelar_sound[4] = carregar_som("assets/revelar4.wav");
 
     Rectangle **matrix_view_game = criar_tabuleiro_visualizacao(tela);
 
@@ -565,20 +650,35 @@ int main()
             {
                 if (matrix_info_game[i][j] <= 0)
                 {
+                    Color color;
+                    if (!CheckCollisionPointRec(mousePoint, matrix_view_game[i][j]))
+                        color = WHITE;
+                    else
+                        color = LIGHTGRAY;
+
                     Rectangle fonteOriginal = {0, 0, (float)tile.width, (float)tile.height};
                     DrawTexturePro(tile,
                                    fonteOriginal,
                                    matrix_view_game[i][j], // Destino na tela
                                    (Vector2){0, 0},        // Origem de rotação
                                    0.0f,                   // Rotação
-                                   WHITE);
+                                   color);
                 }
                 else if (matrix_info_game[i][j] >= 90 && matrix_info_game[i][j] < 95)
                 {
-
                     Rectangle corte = {(matrix_info_game[i][j] - 90) * 50, 0, (float)mine.width / 5, (float)mine.height};
                     DrawTexturePro(mine,
                                    corte,
+                                   matrix_view_game[i][j], // Destino na tela
+                                   (Vector2){0, 0},        // Origem de rotação
+                                   0.0f,                   // Rotação
+                                   WHITE);
+                }
+                else if (matrix_info_game[i][j] == 95)
+                {
+                    Rectangle fonteOriginal = {0, 0, (float)tile_error.width, (float)tile_error.height};
+                    DrawTexturePro(tile_error,
+                                   fonteOriginal,
                                    matrix_view_game[i][j], // Destino na tela
                                    (Vector2){0, 0},        // Origem de rotação
                                    0.0f,                   // Rotação
@@ -601,7 +701,7 @@ int main()
         }
 
         // Desenha a barra de menu superior
-        DrawMenu(bandeiras, tela);
+        DrawMenu(bandeiras, tela, volume);
         DrawMenuDifficulty(menu_dificuldade);
 
         // Escreve os valores se celula revelada
@@ -624,7 +724,7 @@ int main()
                 if (matrix_info_game[i][j] < -9)
                     DrawTexture(flag, j * tela->cell_size, i * tela->cell_size + 100, WHITE);
 
-                else if (!(matrix_info_game[i][j] >= 90 && matrix_info_game[i][j] < 95))
+                else if (!(matrix_info_game[i][j] >= 90 && matrix_info_game[i][j] <= 95))
                     DrawText(text, x, y, font_size, define_cor(matrix_info_game[i][j]));
             }
         }
@@ -677,6 +777,9 @@ int main()
             }
         }
 
+        if (CheckCollisionPointRec(mousePoint, volume->collision) && IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
+            volume->status = !volume->status;
+
         // Jogo em execução
         if (*estado == GamePlaying)
         {
@@ -691,6 +794,19 @@ int main()
                     {
                         if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && matrix_info_game[i][j] >= -9 && !(CheckCollisionPointRec(mousePoint, menu_dificuldade->mini_menu.rectangle)))
                         {
+                            if (matrix_info_game[i][j] != -9 && matrix_info_game[i][j] <= 0 && volume->status)
+                            {
+                                if (matrix_info_game[i][j] >= -4)
+                                { // Evita acesso idevido de memoria
+
+                                    reproduzir_audio(revelar_sound[matrix_info_game[i][j] * -1]);
+                                }
+                                else
+                                {
+                                    reproduzir_audio(revelar_sound[1]);
+                                }
+                            }
+
                             if (isFirstPlay())
                             {
                                 bandeiras = iniciar_partida(matrix_info_game, tela, i, j);
@@ -705,9 +821,10 @@ int main()
 
                             if (matrix_info_game[i][j] == 9)
                             {
-                                DrawRectangleRec(matrix_view_game[i][j], RED);
                                 *estado = GameOver;
                                 animacao_derrota(matrix_info_game, tela, (Vector2){i, j});
+                                if (volume->status)
+                                    reproduzir_audio(mine_sound);
                             }
 
                             if (verificar_vitoria(matrix_info_game, tela->rows, tela->cols, quant_bombas))
@@ -721,9 +838,19 @@ int main()
                         {
                             marca_bandeira(matrix_info_game, tela->rows, tela->cols, i, j);
                             if (matrix_info_game[i][j] >= -9 && matrix_info_game[i][j] < 0)
+                            {
                                 bandeiras++;
+                                // Reproduzir SFX
+                                if (volume->status)
+                                    reproduzir_audio(flag_sound_down);
+                            }
                             else if (matrix_info_game[i][j] <= -9 && matrix_info_game[i][j] < -9)
+                            {
                                 bandeiras--;
+                                // Reproduzir SFX
+                                if (volume->status)
+                                    reproduzir_audio(flag_sound_up);
+                            }
                         }
                     }
                 }
@@ -787,6 +914,26 @@ int main()
     CloseWindow();
     UnloadTexture(flag);
     UnloadTexture(tile);
+    UnloadTexture(tile_error);
+    UnloadTexture(mine);
+
+    for (size_t i = 0; i < MAX_SOUNDS; i++)
+    {
+        UnloadSound(flag_sound_down->sound[i]);
+    }
+
+    for (size_t i = 0; i < MAX_SOUNDS; i++)
+    {
+        UnloadSound(flag_sound_up->sound[i]);
+    }
+
+    for (size_t i = 0; i < 5; i++)
+    {
+        for (size_t j = 0; j < MAX_SOUNDS; j++)
+        {
+            UnloadSound(revelar_sound[i]->sound[j]);
+        }
+    }
 
     for (int i = 0; i < tela->rows; i++)
     {
@@ -798,6 +945,9 @@ int main()
         free(matrix_view_game[i]);
     }
 
+    free((*revelar_sound));
+    free(flag_sound_down);
+    free(flag_sound_up);
     free(*matrix_info_game);
     free(*matrix_view_game);
     free(estado);
