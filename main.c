@@ -20,7 +20,6 @@
 #include "assets/colocar_bandeira.h"
 #include "assets/mine_sound.h"
 
-
 #define MAX_SOUNDS 10
 
 int playing = 0;
@@ -89,48 +88,48 @@ int **criar_tabuleiro_informacao(Screen *screen)
     return tabuleiro;
 }
 
-int marca_vazio(int **table, int lin_selected, int col_selected, int rows_tab, int cols_tab)
+int marca_vazio(int **table, Screen *screen, int lin_selected, int col_selected)
 {
-    if (lin_selected < 0 || lin_selected >= rows_tab || col_selected < 0 || col_selected >= cols_tab)
+    if (lin_selected < 0 || lin_selected >= screen->rows || col_selected < 0 || col_selected >= screen->cols)
         return 0;
 
     if (table[lin_selected][col_selected] == 0)
     {
         table[lin_selected][col_selected] = 10; // marca como revelado
 
-        if (col_selected != cols_tab - 1)
+        if (col_selected != screen->cols - 1)
         {
             if (table[lin_selected][col_selected + 1] != 10)
-                marca_vazio(table, lin_selected, col_selected + 1, rows_tab, cols_tab); // direita
+                marca_vazio(table, screen, lin_selected, col_selected + 1); // direita
 
-            if (lin_selected != rows_tab - 1)
-                marca_vazio(table, lin_selected + 1, col_selected + 1, rows_tab, cols_tab); // diagonal direita inferior
+            if (lin_selected != screen->rows - 1)
+                marca_vazio(table, screen, lin_selected + 1, col_selected + 1); // diagonal direita inferior
         }
 
         if (col_selected != 0)
         {
             if (table[lin_selected][col_selected - 1] != 10)
-                marca_vazio(table, lin_selected, col_selected - 1, rows_tab, cols_tab); // esquerda
+                marca_vazio(table, screen, lin_selected, col_selected - 1); // esquerda
 
             if (lin_selected != 0)
-                marca_vazio(table, lin_selected - 1, col_selected - 1, rows_tab, cols_tab); // diagonal esquerda superior
+                marca_vazio(table, screen, lin_selected - 1, col_selected - 1); // diagonal esquerda superior
         }
 
-        if (lin_selected != rows_tab - 1)
+        if (lin_selected != screen->rows - 1)
         {
             if (table[lin_selected + 1][col_selected] != 10)
-                marca_vazio(table, lin_selected + 1, col_selected, rows_tab, cols_tab); // baixo
+                marca_vazio(table, screen, lin_selected + 1, col_selected); // baixo
 
             if (col_selected != 0)
-                marca_vazio(table, lin_selected + 1, col_selected - 1, rows_tab, cols_tab); // diagonal esquerda inferior
+                marca_vazio(table, screen, lin_selected + 1, col_selected - 1); // diagonal esquerda inferior
         }
 
         if (lin_selected != 0)
         {
             if (table[lin_selected - 1][col_selected] != 10)
-                marca_vazio(table, lin_selected - 1, col_selected, rows_tab, cols_tab); // cima
-            if (col_selected != cols_tab - 1)
-                marca_vazio(table, lin_selected - 1, col_selected + 1, rows_tab, cols_tab); // diagonal direita superior
+                marca_vazio(table, screen, lin_selected - 1, col_selected); // cima
+            if (col_selected != screen->cols - 1)
+                marca_vazio(table, screen, lin_selected - 1, col_selected + 1); // diagonal direita superior
         }
     }
     else if (!(table[lin_selected][col_selected] > 0) && !(table[lin_selected][col_selected] < -10))
@@ -139,7 +138,7 @@ int marca_vazio(int **table, int lin_selected, int col_selected, int rows_tab, i
     return 0;
 }
 
-int gerar_bomba(int **tab, Screen *screen, int lin_click, int col_click)
+int gerar_bomba(int **tab, Screen *screen, Vector2 click_mouse)
 {
     int quant_bombas = 10, rand_lin, rand_col, i = 0;
     double distancia;
@@ -165,7 +164,7 @@ int gerar_bomba(int **tab, Screen *screen, int lin_click, int col_click)
     {
         rand_lin = rand() % screen->rows;
         rand_col = rand() % screen->cols;
-        distancia = sqrt(pow((rand_col - col_click), 2) + pow((rand_lin - lin_click), 2));
+        distancia = sqrt(pow((rand_col - (int)click_mouse.x), 2) + pow((rand_lin - (int)click_mouse.y), 2));
 
         if (distancia >= screen->difficulty * 2 && tab[rand_lin][rand_col] != -9)
         {
@@ -201,9 +200,62 @@ void marcar_bomba(int **tab, int rows, int cols)
     }
 }
 
-void revelar_num(int **tab, int rows_tab, int cols_tab, int lin_selected, int col_selected)
+void animacao_derrota(int **tab_info, Screen *screen, Vector2 clickmouse)
 {
-    if (lin_selected < 0 || lin_selected >= rows_tab || col_selected < 0 || col_selected >= cols_tab)
+    int i, j, aux = 0;
+
+    if (clickmouse.x != -1 && clickmouse.y != -1)
+    {
+        tab_info[(int)clickmouse.y][(int)clickmouse.x] = 94;
+        return;
+    }
+
+    for (i = 0; i < screen->rows; i++)
+    {
+        for (j = 0; j < screen->cols; j++)
+        {
+            if (tab_info[i][j] == -9 || tab_info[i][j] == 9) // Marca como mina não revalada
+            {
+
+                tab_info[i][j] = 90;
+                return;
+            }
+            else if (tab_info[i][j] < -9 && tab_info[i][j] != -19)
+            { // Se a bandeira está marcando um local que não é mina
+                tab_info[i][j] = 95;
+            }
+
+            if (tab_info[i][j] >= 90 && tab_info[i][j] < 94) // Itera sob os estagios da explosao
+            {
+                tab_info[i][j]++;
+                aux = 0;
+            }
+            else if (tab_info[i][j] == 94)
+            {
+                aux = 1;
+            }
+        }
+    }
+
+    if (i == screen->rows && j == screen->cols && aux)
+        derrota = 1;
+}
+
+int verifica_derrota(Screen *screen, int **matrix_info, GameState *estado, Vector2 mouse_click)
+{
+    if (matrix_info[(int)mouse_click.y][(int)mouse_click.x] == 9)
+    {
+        *estado = GameOver;
+        animacao_derrota(matrix_info, screen, mouse_click);
+        return 1;
+    }
+
+    return 0;
+}
+
+void revelar_num(int **tab, Screen *screen, int lin_selected, int col_selected, GameState *estado)
+{
+    if (lin_selected < 0 || lin_selected >= screen->rows || col_selected < 0 || col_selected >= screen->cols)
         return;
 
     if (tab[lin_selected][col_selected] > 0)
@@ -213,9 +265,11 @@ void revelar_num(int **tab, int rows_tab, int cols_tab, int lin_selected, int co
         tab[lin_selected][col_selected] += 10;
 
     if (tab[lin_selected][col_selected] == 0)
-        marca_vazio(tab, lin_selected, col_selected, rows_tab, cols_tab);
+        marca_vazio(tab, screen, lin_selected, col_selected);
     else
         tab[lin_selected][col_selected] *= -1;
+
+    verifica_derrota(screen, tab, estado, (Vector2){col_selected, lin_selected});
 }
 
 int marca_bandeira(int **tab, int rows_tab, int cols_tab, int lin_selected, int col_selected)
@@ -260,9 +314,9 @@ int isFirstPlay()
     return !playing;
 }
 
-int iniciar_partida(int **tab, Screen *screen, int lins_bomb, int col_bomb)
+int iniciar_partida(int **tab, Screen *screen, Vector2 click_mouse)
 {
-    int quantidade_bandeira = gerar_bomba(tab, screen, lins_bomb, col_bomb);
+    int quantidade_bandeira = gerar_bomba(tab, screen, click_mouse);
     marcar_bomba(tab, screen->rows, screen->cols);
 
     return quantidade_bandeira;
@@ -306,58 +360,19 @@ GameState reset_game(int **tab, Screen *screen)
     return GamePlaying;
 }
 
-int verificar_vitoria(int **tab, int rows, int cols, int quant_bombas)
+int verificar_vitoria(int **tab, Screen *screen, int quant_bombas, GameState *estado)
 {
-    for (int i = 0; i < rows; i++)
+    for (int i = 0; i < screen->rows; i++)
     {
-        for (int j = 0; j < cols; j++)
+        for (int j = 0; j < screen->cols; j++)
         {
             if (tab[i][j] < 0 && tab[i][j] != -9 && tab[i][j] != -19)
                 return 0;
         }
     }
+
+    *estado = GameWinned;
     return 1;
-}
-
-void animacao_derrota(int **tab_info, Screen *screen, Vector2 clickmouse)
-{
-    int i, j, aux = 0;
-
-    if (clickmouse.x != -1 && clickmouse.y != -1)
-    {
-        tab_info[(int)clickmouse.x][(int)clickmouse.y] = 94;
-        return;
-    }
-
-    for (i = 0; i < screen->rows; i++)
-    {
-        for (j = 0; j < screen->cols; j++)
-        {
-            if (tab_info[i][j] == -9 || tab_info[i][j] == 9) // Marca como mina não revalada
-            {
-
-                tab_info[i][j] = 90;
-                return;
-            }
-            else if (tab_info[i][j] < -9 && tab_info[i][j] != -19)
-            { // Se a bandeira está marcando um local que não é mina
-                tab_info[i][j] = 95;
-            }
-
-            if (tab_info[i][j] >= 90 && tab_info[i][j] < 94) // Itera sob os estagios da explosao
-            {
-                tab_info[i][j]++;
-                aux = 0;
-            }
-            else if (tab_info[i][j] == 94)
-            {
-                aux = 1;
-            }
-        }
-    }
-
-    if (i == screen->rows && j == screen->cols && aux)
-        derrota = 1;
 }
 
 void desenha_tela_vitoria_derrota(int **matrix_info_game, Screen *screen, float piscar, GameState *estado, char *texto1, char *texto2)
@@ -375,9 +390,6 @@ void desenha_tela_vitoria_derrota(int **matrix_info_game, Screen *screen, float 
     {
         DrawText(texto2, screen->screenWidth / 2 - textwidth2 / 2 + 20, screen->screenHeight / 2 + 100, fontsize2, BLACK);
     }
-
-    if (IsKeyPressed(KEY_ENTER))
-        *estado = reset_game(matrix_info_game, screen);
 }
 
 Color define_cor(int num)
@@ -548,13 +560,15 @@ void DrawMenuDifficulty(MenuDifficulty *menu)
     }
 }
 
-Texture2D carregar_textura(Screen *screen, char *src, int size)
+Texture2D carregar_textura(Screen *screen, char *src, int size, Vector2 size_texture)
 {
     Image image = LoadImageFromMemory(".png", src, size);
     if (image.data == NULL)
         return (Texture2D){0};
 
-    ImageResize(&image, screen->cell_size, screen->cell_size);
+    if (image.width != (int)size_texture.x || image.height != (int)size_texture.y)
+        ImageResize(&image, screen->cell_size, screen->cell_size);
+
     Texture2D texture = LoadTextureFromImage(image);
     UnloadImage(image);
 
@@ -565,7 +579,7 @@ Texture2D carregar_textura(Screen *screen, char *src, int size)
 SoundList *carregar_som(char *src, int size)
 {
     SoundList *lista_som = (SoundList *)malloc(sizeof(SoundList));
-    
+
     Wave temp = LoadWaveFromMemory(".wav", src, size);
     lista_som->sound[0] = LoadSoundFromWave(temp);
 
@@ -588,8 +602,8 @@ void reproduzir_audio(SoundList *som)
 Volume *definir_volume(Screen *screen)
 {
     Volume *volume = (Volume *)malloc(sizeof(Volume));
-    volume->volume_off = carregar_textura(screen, volume_off, volume_off_size);
-    volume->volume_on = carregar_textura(screen, volume_up, volume_up_size);
+    volume->volume_off = carregar_textura(screen, volume_off, volume_off_size, (Vector2){50, 50});
+    volume->volume_on = carregar_textura(screen, volume_up, volume_up_size, (Vector2){50, 50});
     volume->status = true;
 
     volume->collision.x = screen->screenWidth - 50;
@@ -598,6 +612,38 @@ Volume *definir_volume(Screen *screen)
     volume->collision.width = 50;
 
     return volume;
+}
+
+void revelar_automatico(Screen *screen, int **matrix_info, Vector2 mouseclick, GameState *estado)
+{
+    int count = 0;
+    for (int i = -1; i <= 1; i++)
+    { // evitar cantos
+        for (int j = -1; j <= 1; j++)
+        {
+            if ((int)mouseclick.y + i < 0 || (int)mouseclick.x + j < 0 || (int)mouseclick.y + i > screen->rows - 1 || (int)mouseclick.x + j > screen->cols - 1)
+                continue;
+
+            if (matrix_info[(int)mouseclick.y + i][(int)mouseclick.x + j] < -9 && matrix_info[(int)mouseclick.y + i][(int)mouseclick.x + j] >= -19 && matrix_info[(int)mouseclick.y + i][(int)mouseclick.x + j] != matrix_info[(int)mouseclick.y][(int)mouseclick.x])
+                count++;
+        }
+    }
+
+    if (count == matrix_info[(int)mouseclick.y][(int)mouseclick.x])
+    {
+        for (int i = -1; i <= 1; i++)
+        {
+            for (int j = -1; j <= 1; j++)
+            {
+                if ((int)mouseclick.y + i < 0 || (int)mouseclick.x + j < 0 || (int)mouseclick.y + i > screen->rows - 1 || (int)mouseclick.x + j > screen->cols - 1)
+                    continue;
+                if (!(i == 0 && j == 0) && matrix_info[(int)mouseclick.y + i][(int)mouseclick.x + j] <= 0 && matrix_info[(int)mouseclick.y + i][(int)mouseclick.x + j] != -19)
+                {
+                    revelar_num(matrix_info, screen, (int)mouseclick.y + i, (int)mouseclick.x + j, estado);
+                }
+            }
+        }
+    }
 }
 
 int main()
@@ -621,14 +667,16 @@ int main()
     if (IsWindowState(FLAG_WINDOW_RESIZABLE))
         ClearWindowState(FLAG_WINDOW_RESIZABLE);
 
+    SetTargetFPS(60);
+
     Image img_icon = LoadImageFromMemory(".png", icon, icon_size);
     SetWindowIcon(img_icon);
 
-    Texture2D flag = carregar_textura(tela, flag_header, flag_size);
-    Texture2D tile = carregar_textura(tela, tile_header, tile_size);
-    Texture2D tile_error = carregar_textura(tela, tile_error_header, tile_error_size);
-    Texture2D mine = LoadTextureFromImage(LoadImageFromMemory(".png", mine_header, mine_header_size));
-    SetTextureFilter(mine, TEXTURE_FILTER_POINT);
+    Texture2D flag = carregar_textura(tela, flag_header, flag_size, (Vector2){tela->cell_size, tela->cell_size});
+    Texture2D tile = carregar_textura(tela, tile_header, tile_size, (Vector2){tela->cell_size, tela->cell_size});
+    Texture2D tile_error = carregar_textura(tela, tile_error_header, tile_error_size, (Vector2){tela->cell_size, tela->cell_size});
+    Texture2D mine = carregar_textura(tela, mine_header, mine_header_size, (Vector2){250, 50});
+
     volume = definir_volume(tela);
 
     InitAudioDevice();
@@ -776,8 +824,9 @@ int main()
                     matrix_info_game = criar_tabuleiro_informacao(tela);
                     matrix_view_game = criar_tabuleiro_visualizacao(tela);
                     menu_dificuldade = criar_menu_dificuldade(tela);
-                    flag = carregar_textura(tela, flag_header, flag_size);
-                    tile = carregar_textura(tela, tile_header, tile_size);
+                    flag = carregar_textura(tela, flag_header, flag_size, (Vector2){tela->cell_size, tela->cell_size});
+                    tile = carregar_textura(tela, tile_header, tile_size, (Vector2){tela->cell_size, tela->cell_size});
+                    volume = definir_volume(tela);
                     *estado = reset_game(matrix_info_game, tela);
                     SetWindowSize(tela->screenWidth, tela->screenHeight);
                 }
@@ -805,6 +854,13 @@ int main()
                     {
                         if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && matrix_info_game[i][j] >= -9 && !(CheckCollisionPointRec(mousePoint, menu_dificuldade->mini_menu.rectangle)))
                         {
+                            if (isFirstPlay())
+                            {
+                                bandeiras = iniciar_partida(matrix_info_game, tela, (Vector2){j, i});
+                                quant_bombas = bandeiras;
+                                playing = 1;
+                            }
+
                             if (matrix_info_game[i][j] != -9 && matrix_info_game[i][j] <= 0 && volume->status)
                             {
                                 if (matrix_info_game[i][j] >= -4)
@@ -818,34 +874,19 @@ int main()
                                 }
                             }
 
-                            if (isFirstPlay())
-                            {
-                                bandeiras = iniciar_partida(matrix_info_game, tela, i, j);
-                                quant_bombas = bandeiras;
-                                playing = 1;
-                            }
-
                             if (matrix_info_game[i][j] < -9)
                                 bandeiras++;
 
-                            revelar_num(matrix_info_game, tela->rows, tela->cols, i, j);
+                            revelar_num(matrix_info_game, tela, i, j, estado);
 
-                            if (matrix_info_game[i][j] == 9)
-                            {
-                                *estado = GameOver;
-                                animacao_derrota(matrix_info_game, tela, (Vector2){i, j});
-                                if (volume->status)
-                                    reproduzir_audio(mine_sound);
-                            }
+                            if (volume->status && *estado == GameOver)
+                                reproduzir_audio(mine_sound);
 
-                            if (verificar_vitoria(matrix_info_game, tela->rows, tela->cols, quant_bombas))
-                            {
-                                printf("GANHOU PAI!");
-                                *estado = GameWinned;
+                            if (verificar_vitoria(matrix_info_game, tela, quant_bombas, estado))
                                 bandeiras = quant_bombas;
-                            }
                         }
-                        if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT))
+
+                        else if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT))
                         {
                             marca_bandeira(matrix_info_game, tela->rows, tela->cols, i, j);
                             if (matrix_info_game[i][j] >= -9 && matrix_info_game[i][j] < 0)
@@ -862,6 +903,16 @@ int main()
                                 if (volume->status)
                                     reproduzir_audio(flag_sound_up);
                             }
+
+                            verificar_vitoria(matrix_info_game, tela, quant_bombas, estado);
+                        }
+
+                        else if (IsMouseButtonPressed(MOUSE_MIDDLE_BUTTON) && matrix_info_game[i][j] > 0 && matrix_info_game[i][j] <= 8)
+                        {
+                            revelar_automatico(tela, matrix_info_game, (Vector2){j, i}, estado);
+                            verificar_vitoria(matrix_info_game, tela, quant_bombas, estado);
+                            if (volume->status && *estado == GameOver)
+                                reproduzir_audio(mine_sound);
                         }
                     }
                 }
@@ -874,7 +925,7 @@ int main()
 
         if (*estado == GameOver)
         {
-            if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
+            if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) || IsKeyPressed(KEY_ENTER))
                 skip_animacao_derrota++;
 
             if (timer_derrota > 0.15)
@@ -888,8 +939,11 @@ int main()
             {
                 desenha_tela_vitoria_derrota(matrix_info_game, tela, piscar, estado, "Você Perdeu!", "Pressione Enter para reiniciar!");
 
-                if (IsKeyPressed(KEY_ENTER))
+                if (IsKeyPressed(KEY_ENTER) || IsMouseButtonPressed(MOUSE_LEFT_BUTTON) && skip_animacao_derrota >= 3)
+                {
+                    *estado = reset_game(matrix_info_game, tela);
                     skip_animacao_derrota = 0;
+                }
             }
 
             piscar += GetFrameTime();
@@ -922,7 +976,6 @@ int main()
         EndDrawing();
     }
 
-    CloseWindow();
     UnloadTexture(flag);
     UnloadTexture(tile);
     UnloadTexture(tile_error);
@@ -955,6 +1008,8 @@ int main()
     {
         free(matrix_view_game[i]);
     }
+
+    CloseWindow();
 
     free((*revelar_sound));
     free(flag_sound_down);
